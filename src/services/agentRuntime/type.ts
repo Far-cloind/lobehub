@@ -13,8 +13,15 @@ export interface StreamEvent {
     | 'stream_chunk'
     | 'stream_end'
     | 'stream_retry'
+    | 'tool_start'
+    | 'tool_end'
+    | 'tool_execute'
+    | 'tool_result'
+    | 'agent_intervention_request'
+    | 'agent_intervention_response'
     | 'step_start'
     | 'step_complete'
+    | 'notify_update'
     | 'error'
     | 'heartbeat';
 }

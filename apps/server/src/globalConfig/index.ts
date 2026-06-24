@@ -108,6 +108,7 @@ export const getServerGlobalConfig = async () => {
     enableGatewayMode:
       ENABLE_BUSINESS_FEATURES || (!!appEnv.ENABLE_AGENT_GATEWAY && !!appEnv.AGENT_GATEWAY_URL),
     enableLobehubSkill: !!(appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID),
+    enableLocalCodexBridge: !!appEnv.ENABLE_LOCAL_CODEX_BRIDGE,
     enableMagicLink: authEnv.AUTH_ENABLE_MAGIC_LINK,
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID

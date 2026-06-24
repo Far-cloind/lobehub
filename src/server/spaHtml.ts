@@ -4,6 +4,8 @@ import { type AnalyticsConfig } from '@/types/spaServerConfig';
 
 export const VITE_DEV_ORIGIN = 'http://localhost:9876';
 
+const getViteDevPublicOrigin = () => process.env.VITE_DEV_PUBLIC_ORIGIN || VITE_DEV_ORIGIN;
+
 const SERVER_CONFIG_PLACEHOLDER =
   /window\.__SERVER_CONFIG__\s*=\s*undefined;\s*\/\*\s*SERVER_CONFIG\s*\*\//;
 
@@ -61,7 +63,7 @@ export async function fetchViteDevTemplate(
   const res = await fetch(`${origin}${pathname}`);
   const html = await res.text();
 
-  return rewriteViteAssetUrls(html, origin);
+  return rewriteViteAssetUrls(html, getViteDevPublicOrigin());
 }
 
 export function buildAnalyticsConfig(options: { desktop?: boolean } = {}): AnalyticsConfig {

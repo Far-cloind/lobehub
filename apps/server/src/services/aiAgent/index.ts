@@ -1344,6 +1344,8 @@ export class AiAgentService {
 
     if (isHeteroAgent) {
       const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
+      const useLocalCodexBridge =
+        process.env.ENABLE_LOCAL_CODEX_BRIDGE === '1' && heteroType === 'codex';
       const operationId = nanoid();
 
       // Persist a first-class agent_operations row for the hetero run. The id is
@@ -1378,12 +1380,14 @@ export class AiAgentService {
       const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
       // Sign an operation-scoped JWT so the CLI can authenticate against
       // heteroIngest / heteroFinish without full user credentials.
-      let operationJwt: string;
-      try {
-        operationJwt = await signOperationJwt(this.userId);
-      } catch (err) {
-        log('execAgent: failed to sign operation JWT for hetero run: %O', err);
-        throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });
+      let operationJwt = '';
+      if (!useLocalCodexBridge) {
+        try {
+          operationJwt = await signOperationJwt(this.userId);
+        } catch (err) {
+          log('execAgent: failed to sign operation JWT for hetero run: %O', err);
+          throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });
+        }
       }
 
       // Read repos from topic metadata for sandbox setup (web/cloud only).
@@ -1764,32 +1768,52 @@ export class AiAgentService {
             };
           }
         } else {
-          // Cloud sandbox path — only for local CLI agents (claude-code / codex).
-          // Remote agents (openclaw / hermes) always require a bound device.
-          const { spawnHeteroSandbox } =
-            await import('@/server/services/heterogeneousAgent/sandboxRunner');
-          spawnHeteroSandbox({
-            ...heteroParams,
-            agentType: heteroType as 'claude-code' | 'codex',
-            args: heteroExecArgs,
-            marketService: this.marketService,
-          }).catch(async (err) => {
-            // Fire-and-forget: execAgent has already returned `autoStarted`, and
-            // the sandbox never reached the point of calling heteroFinish. Drive
-            // the same terminal funnel so the stranded run surfaces an error and
-            // its task is marked failed instead of hanging in `running`.
-            log('execAgent: hetero sandbox spawn failed: %O', err);
-            await this.finalizeHeteroDispatchError({
-              agentId: resolvedAgentId,
-              assistantMessageId: assistantMessageRecord.id,
-              detail: err instanceof Error ? err.message : String(err),
-              message: 'Hetero sandbox spawn failed',
-              operationId,
-              topicId,
-            }).catch((finalizeErr) =>
-              log('execAgent: sandbox-failure finalize failed: %O', finalizeErr),
-            );
-          });
+          if (useLocalCodexBridge) {
+            const { spawnLocalCodex } =
+              await import('@/server/services/heterogeneousAgent/localCodexRunner');
+            const localCwd = process.env.LOCAL_CODEX_WORKING_DIR || process.cwd();
+            const { buildRemoteDeviceHeteroContext } =
+              await import('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext');
+            const localSystemContext = buildRemoteDeviceHeteroContext({
+              agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+              conversationHistory,
+              cwd: localCwd,
+            });
+            spawnLocalCodex({
+              ...heteroParams,
+              cwd: localCwd,
+              heterogeneousAgentService: heteroService,
+              model: agentConfig.agencyConfig?.heterogeneousProvider?.model,
+              systemContext: localSystemContext,
+            }).catch((err) => {
+              log('execAgent: local Codex spawn failed: %O', err);
+            });
+          } else {
+            // Cloud sandbox path — only for local CLI agents (claude-code / codex).
+            // Remote agents (openclaw / hermes) always require a bound device.
+            const { spawnHeteroSandbox } =
+              await import('@/server/services/heterogeneousAgent/sandboxRunner');
+            spawnHeteroSandbox({
+              ...heteroParams,
+              agentType: heteroType as 'claude-code' | 'codex',
+              args: heteroExecArgs,
+              marketService: this.marketService,
+            }).catch(async (err) => {
+              // Fire-and-forget: execAgent has already returned `autoStarted`, and
+              // the sandbox never reached the point of calling heteroFinish.
+              log('execAgent: hetero sandbox spawn failed: %O', err);
+              await this.finalizeHeteroDispatchError({
+                agentId: resolvedAgentId,
+                assistantMessageId: assistantMessageRecord.id,
+                detail: err instanceof Error ? err.message : String(err),
+                message: 'Hetero sandbox spawn failed',
+                operationId,
+                topicId,
+              }).catch((finalizeErr) =>
+                log('execAgent: sandbox-failure finalize failed: %O', finalizeErr),
+              );
+            });
+          }
         }
       }
 
@@ -3994,7 +4018,14 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
-    // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
+    // 2. Cancel a server-hosted Codex process if this operation belongs to one.
+    if (process.env.ENABLE_LOCAL_CODEX_BRIDGE === '1') {
+      const { cancelLocalCodexRun } =
+        await import('@/server/services/heterogeneousAgent/localCodexRunner');
+      cancelLocalCodexRun(resolvedOperationId, this.userId);
+    }
+
+    // 3. Cancel remote hetero process (openclaw / hermes) if applicable.
     // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
@@ -4035,7 +4066,7 @@ export class AiAgentService {
       }
     }
 
-    // 3. Interrupt the runtime operation first. Only mark the thread cancelled
+    // 4. Interrupt the runtime operation first. Only mark the thread cancelled
     // after the runtime acknowledges the interrupt to avoid unlocking a live task.
     const interrupted = await this.agentRuntimeService.interruptOperation(resolvedOperationId);
     log(
@@ -4054,7 +4085,7 @@ export class AiAgentService {
       };
     }
 
-    // 4. Update Thread status to cancel
+    // 5. Update Thread status to cancel
     if (thread) {
       await this.threadModel.update(thread.id, {
         metadata: {

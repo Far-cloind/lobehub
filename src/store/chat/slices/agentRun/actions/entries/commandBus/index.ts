@@ -1,7 +1,14 @@
 import type { CommandType } from '@/features/ChatInput/InputEditor/ActionTag/types';
 
 import type { SendMessageWithContextParams } from '../conversationLifecycle';
-import { compactHandler, newTopicHandler } from './handlers';
+import {
+  compactHandler,
+  modelHandler,
+  newTopicHandler,
+  skillHandler,
+  skillsHandler,
+  statusHandler,
+} from './handlers';
 import { parseCommandsFromEditorData } from './parseCommands';
 import type { CommandHandlerContext, CommandRegistry, CommandSendOverrides } from './types';
 
@@ -21,7 +28,11 @@ export type { CommandSendOverrides } from './types';
 
 const COMMAND_REGISTRY: CommandRegistry = {
   compact: compactHandler,
+  model: modelHandler,
   newTopic: newTopicHandler,
+  skill: skillHandler,
+  skills: skillsHandler,
+  status: statusHandler,
 };
 
 /**
@@ -29,6 +40,25 @@ const COMMAND_REGISTRY: CommandRegistry = {
  * Returns merged overrides from all matched command handlers.
  */
 export const processCommands = (params: SendMessageWithContextParams): CommandSendOverrides => {
+  const text = params.message.trim();
+  if (text === '/status') return { triggerCodexStatus: true };
+  if (text === '/model') return { showCodexModel: true };
+  if (text === '/skills') return { listCodexSkills: true };
+  if (text === '/skill') return { showCodexSkillHelp: true };
+
+  if (text.startsWith('/model ')) {
+    const model = text.slice('/model '.length).trim();
+    if (/^[\w.-]+$/.test(model)) return { switchCodexModel: model };
+  }
+
+  if (text.startsWith('/skill ')) {
+    const invocation = text.slice('/skill '.length).trim();
+    const separator = invocation.search(/\s/);
+    const name = separator < 0 ? invocation : invocation.slice(0, separator);
+    const task = separator < 0 ? '' : invocation.slice(separator).trim();
+    if (/^[\w.-]+$/.test(name)) return { invokeCodexSkill: { name, task } };
+  }
+
   const commands = parseCommandsFromEditorData(params.editorData);
   const commandTags = commands.filter((c) => c.category === 'command');
 

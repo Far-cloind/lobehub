@@ -25,6 +25,7 @@ import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
@@ -189,6 +190,37 @@ export class ConversationLifecycleActionImpl {
     this.#get = get;
   }
 
+  #persistCommandResponse = async (
+    context: ConversationContext,
+    command: string,
+    response: string,
+    options?: { model?: string; parentId?: string },
+  ): Promise<void> => {
+    const userResult = await messageService.createMessage({
+      agentId: context.agentId,
+      content: command,
+      groupId: context.groupId ?? undefined,
+      parentId: options?.parentId,
+      role: 'user',
+      threadId: context.threadId ?? undefined,
+      topicId: context.topicId ?? undefined,
+    });
+    this.#get().replaceMessages(userResult.messages, { context });
+
+    const assistantResult = await messageService.createMessage({
+      agentId: context.agentId,
+      content: response,
+      groupId: context.groupId ?? undefined,
+      model: options?.model,
+      parentId: userResult.id,
+      provider: 'codex',
+      role: 'assistant',
+      threadId: context.threadId ?? undefined,
+      topicId: context.topicId ?? undefined,
+    });
+    this.#get().replaceMessages(assistantResult.messages, { context });
+  };
+
   /**
    * Read the active topic-list filter from `topicDataMap` so it can be
    * forwarded to `sendMessageInServer`. Without this, the server returns
@@ -276,6 +308,189 @@ export class ConversationLifecycleActionImpl {
       parentId: inputParentId,
       pageSelections,
     });
+
+    if (commandOverrides.showCodexModel) {
+      let response = t('codexCommand.codexOnly', { ns: 'chat' });
+      if (heterogeneousProvider?.type === 'codex') {
+        const models = await aiAgentService.listLocalCodexModels();
+        const modelList =
+          models.length > 0
+            ? models
+                .map((model) => {
+                  const contextLabel = model.contextWindow
+                    ? ` · ${Math.round(model.contextWindow / 1000)}K ${t('codexRuntime.context', {
+                        ns: 'chat',
+                      })}`
+                    : '';
+                  return `- **${model.displayName}** (\`${model.slug}\`)${contextLabel}${
+                    model.description ? `\n  ${model.description}` : ''
+                  }`;
+                })
+                .join('\n')
+            : t('codexCommand.noModels', { ns: 'chat' });
+        response = [
+          t('codexCommand.currentModel', {
+            model: heterogeneousProvider.model || 'default',
+            ns: 'chat',
+          }),
+          modelList,
+          t('codexCommand.modelHelp', { ns: 'chat' }),
+        ].join('\n\n');
+      }
+      await this.#persistCommandResponse(context, '/model', response, {
+        model: heterogeneousProvider?.model,
+        parentId: inputParentId,
+      });
+      return;
+    }
+
+    if (commandOverrides.switchCodexModel) {
+      if (heterogeneousProvider?.type !== 'codex') {
+        await this.#persistCommandResponse(
+          context,
+          message.trim(),
+          t('codexCommand.codexOnly', { ns: 'chat' }),
+          { parentId: inputParentId },
+        );
+        return;
+      }
+      await useAgentStore.getState().updateAgentConfigById(agentId, {
+        agencyConfig: {
+          ...agentConfig?.agencyConfig,
+          heterogeneousProvider: {
+            ...heterogeneousProvider,
+            model: commandOverrides.switchCodexModel,
+          },
+        },
+      });
+      await this.#persistCommandResponse(
+        context,
+        message.trim(),
+        t('codexCommand.modelChanged', {
+          model: commandOverrides.switchCodexModel,
+          ns: 'chat',
+        }),
+        { model: commandOverrides.switchCodexModel, parentId: inputParentId },
+      );
+      return;
+    }
+
+    if (commandOverrides.listCodexSkills) {
+      if (heterogeneousProvider?.type !== 'codex') {
+        await this.#persistCommandResponse(
+          context,
+          '/skills',
+          t('codexCommand.codexOnly', { ns: 'chat' }),
+          { parentId: inputParentId },
+        );
+        return;
+      }
+      const skills = await aiAgentService.listLocalCodexSkills();
+      const formatSkills = (source: 'codex-system' | 'project' | 'user') =>
+        skills
+          .filter((skill) => skill.source === source)
+          .map(
+            (skill) => `- \`$${skill.name}\`${skill.description ? `: ${skill.description}` : ''}`,
+          );
+      const sections = [
+        [t('codexCommand.systemSkills', { ns: 'chat' }), formatSkills('codex-system')],
+        [t('codexCommand.projectSkills', { ns: 'chat' }), formatSkills('project')],
+        [t('codexCommand.userSkills', { ns: 'chat' }), formatSkills('user')],
+      ]
+        .filter(([, items]) => items.length > 0)
+        .map(([title, items]) => `### ${title}\n${items.join('\n')}`);
+      const response =
+        sections.length > 0 ? sections.join('\n\n') : t('codexCommand.noSkills', { ns: 'chat' });
+      await this.#persistCommandResponse(context, '/skills', response, {
+        model: heterogeneousProvider.model,
+        parentId: inputParentId,
+      });
+      return;
+    }
+
+    if (commandOverrides.showCodexSkillHelp) {
+      await this.#persistCommandResponse(
+        context,
+        '/skill',
+        heterogeneousProvider?.type === 'codex'
+          ? t('codexCommand.skillHelp', { ns: 'chat' })
+          : t('codexCommand.codexOnly', { ns: 'chat' }),
+        { model: heterogeneousProvider?.model, parentId: inputParentId },
+      );
+      return;
+    }
+
+    if (commandOverrides.invokeCodexSkill) {
+      if (heterogeneousProvider?.type !== 'codex') {
+        await this.#persistCommandResponse(
+          context,
+          message.trim(),
+          t('codexCommand.codexOnly', { ns: 'chat' }),
+          { parentId: inputParentId },
+        );
+        return;
+      }
+      const { name, task } = commandOverrides.invokeCodexSkill;
+      message = `$${name}${task ? ` ${task}` : ''}`;
+    }
+
+    if (commandOverrides.triggerCodexStatus) {
+      if (heterogeneousProvider?.type !== 'codex') {
+        await this.#persistCommandResponse(
+          context,
+          '/status',
+          t('codexStatus.codexOnly', { ns: 'chat' }),
+          { parentId: inputParentId },
+        );
+        return;
+      }
+
+      try {
+        const status = await aiAgentService.getLocalCodexStatus(context.topicId);
+        if (!status) {
+          await this.#persistCommandResponse(
+            context,
+            '/status',
+            t('codexStatus.unavailable', { ns: 'chat' }),
+            { model: heterogeneousProvider.model, parentId: inputParentId },
+          );
+          return;
+        }
+
+        const formatWindow = (
+          window: { resetsAt: number; usedPercent: number; windowMinutes: number } | undefined,
+          label: string,
+        ) =>
+          window
+            ? `${label}: ${Math.max(0, 100 - window.usedPercent)}% · ${t('codexStatus.resetsAt', {
+                date: new Date(window.resetsAt * 1000).toLocaleString(),
+                ns: 'chat',
+              })}`
+            : `${label}: ${t('codexStatus.unavailableValue', { ns: 'chat' })}`;
+
+        await this.#persistCommandResponse(
+          context,
+          '/status',
+          [
+            formatWindow(status.primary, t('codexStatus.fiveHour', { ns: 'chat' })),
+            formatWindow(status.secondary, t('codexStatus.weekly', { ns: 'chat' })),
+            `${t('codexStatus.updatedAt', { ns: 'chat' })}: ${new Date(
+              status.updatedAt,
+            ).toLocaleString()}`,
+          ].join('\n'),
+          { model: heterogeneousProvider.model, parentId: inputParentId },
+        );
+      } catch (error) {
+        console.error('[/status] Failed to load Codex usage:', error);
+        await this.#persistCommandResponse(
+          context,
+          '/status',
+          t('codexStatus.failed', { ns: 'chat' }),
+          { model: heterogeneousProvider.model, parentId: inputParentId },
+        );
+      }
+      return;
+    }
 
     // /compact — directly compress context without sending any message
     if (commandOverrides.triggerCompression) {

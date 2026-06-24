@@ -94,6 +94,86 @@ describe('processCommands', () => {
     expect(result.triggerCompression).toBe(true);
   });
 
+  it('should return triggerCodexStatus for a literal status command', () => {
+    expect(processCommands({ ...baseParams, message: '/status' })).toEqual({
+      triggerCodexStatus: true,
+    });
+  });
+
+  it('should parse Codex model and skill commands', () => {
+    expect(processCommands({ ...baseParams, message: '/model' })).toEqual({
+      showCodexModel: true,
+    });
+    expect(processCommands({ ...baseParams, message: '/model gpt-5.4' })).toEqual({
+      switchCodexModel: 'gpt-5.4',
+    });
+    expect(processCommands({ ...baseParams, message: '/skills' })).toEqual({
+      listCodexSkills: true,
+    });
+    expect(processCommands({ ...baseParams, message: '/skill imagegen create a logo' })).toEqual({
+      invokeCodexSkill: { name: 'imagegen', task: 'create a logo' },
+    });
+    expect(processCommands({ ...baseParams, message: '/skill' })).toEqual({
+      showCodexSkillHelp: true,
+    });
+  });
+
+  it.each([
+    ['model', { showCodexModel: true }],
+    ['skills', { listCodexSkills: true }],
+    ['skill', { showCodexSkillHelp: true }],
+  ])('should process the %s command tag', (type, expected) => {
+    const result = processCommands({
+      ...baseParams,
+      editorData: {
+        root: {
+          children: [
+            {
+              children: [
+                {
+                  actionCategory: 'command',
+                  actionLabel: type,
+                  actionType: type,
+                  type: 'action-tag',
+                },
+              ],
+              type: 'paragraph',
+            },
+          ],
+          type: 'root',
+        },
+      },
+    });
+
+    expect(result).toEqual(expected);
+  });
+
+  it('should return triggerCodexStatus for a status command tag', () => {
+    const result = processCommands({
+      ...baseParams,
+      editorData: {
+        root: {
+          children: [
+            {
+              children: [
+                {
+                  actionCategory: 'command',
+                  actionLabel: 'Codex usage status',
+                  actionType: 'status',
+                  type: 'action-tag',
+                },
+              ],
+              type: 'paragraph',
+            },
+          ],
+          type: 'root',
+        },
+      },
+    });
+
+    expect(result.triggerCodexStatus).toBe(true);
+  });
+
   it('should merge overrides from multiple commands', () => {
     const params = {
       ...baseParams,

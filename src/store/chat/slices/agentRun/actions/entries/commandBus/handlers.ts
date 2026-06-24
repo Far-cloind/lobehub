@@ -15,3 +15,19 @@ export const newTopicHandler: CommandHandler = () => {
 export const compactHandler: CommandHandler = () => {
   return { triggerCompression: true };
 };
+
+export const statusHandler: CommandHandler = () => {
+  return { triggerCodexStatus: true };
+};
+
+export const modelHandler: CommandHandler = () => {
+  return { showCodexModel: true };
+};
+
+export const skillsHandler: CommandHandler = () => {
+  return { listCodexSkills: true };
+};
+
+export const skillHandler: CommandHandler = () => {
+  return { showCodexSkillHelp: true };
+};

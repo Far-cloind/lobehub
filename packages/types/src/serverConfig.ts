@@ -73,6 +73,10 @@ export interface GlobalServerConfig {
    */
   enableGatewayMode?: boolean;
   enableLobehubSkill?: boolean;
+  /**
+   * Whether this self-hosted server exposes a local Codex bridge for Web users.
+   */
+  enableLocalCodexBridge?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;

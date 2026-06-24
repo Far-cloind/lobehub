@@ -22,6 +22,7 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -211,6 +212,7 @@ export const useCreateMenuItems = () => {
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
   const enablePlatformAgent = useUserStore(labPreferSelectors.enablePlatformAgent);
+  const enableLocalCodexBridge = useServerConfigStore(serverConfigSelectors.enableLocalCodexBridge);
 
   /**
    * Create agent menu item
@@ -236,13 +238,18 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create heterogeneous agent menu items (Desktop only)
+   * Create heterogeneous agent menu items.
+   * Desktop can run local CLIs directly. Web only exposes Codex when a self-hosted bridge is enabled.
    */
   const createHeterogeneousAgentMenuItems = useCallback(
     (options?: CreateAgentOptions): ItemType[] => {
-      if (!isDesktop) return [];
+      const definitions = isDesktop
+        ? HETEROGENEOUS_AGENT_CLIENT_CONFIGS
+        : enableLocalCodexBridge
+          ? HETEROGENEOUS_AGENT_CLIENT_CONFIGS.filter((definition) => definition.type === 'codex')
+          : [];
 
-      return HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((definition) => {
+      return definitions.map((definition) => {
         const AgentIcon = definition.icon;
 
         return {
@@ -259,7 +266,7 @@ export const useCreateMenuItems = () => {
         };
       });
     },
-    [canCreate, t, createHeterogeneousAgent],
+    [canCreate, t, createHeterogeneousAgent, enableLocalCodexBridge],
   );
 
   /**

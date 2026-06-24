@@ -78,6 +78,9 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       ENABLE_AGENT_GATEWAY: z.boolean().optional(),
       AGENT_GATEWAY_URL: z.string().url().optional(),
+      ENABLE_LOCAL_CODEX_BRIDGE: z.boolean().optional(),
+      LOCAL_CODEX_COMMAND: z.string().optional(),
+      LOCAL_CODEX_WORKING_DIR: z.string().optional(),
       /**
        * Enable Queue-based Agent Runtime
        * When true, use QStash for async agent execution (production)
@@ -124,6 +127,9 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
+      ENABLE_LOCAL_CODEX_BRIDGE: process.env.ENABLE_LOCAL_CODEX_BRIDGE === '1',
+      LOCAL_CODEX_COMMAND: process.env.LOCAL_CODEX_COMMAND,
+      LOCAL_CODEX_WORKING_DIR: process.env.LOCAL_CODEX_WORKING_DIR,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
     },

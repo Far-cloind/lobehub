@@ -201,6 +201,14 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
+    // The local bridge does not have the cloud gateway's separate topic-status
+    // callback, so clear the persisted running state on every terminal result.
+    try {
+      await this.topicModel.update(topicId, { status: 'active' });
+    } catch (err) {
+      log('heteroFinish: failed to clear topic running status (non-fatal): %O', err);
+    }
+
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
     // (onTopicComplete → task done/failed) and any IM bot completion callback

@@ -1,7 +1,18 @@
 name: lobehub
 services:
   lobe:
-    image: lobehub/lobehub
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        USE_CN_MIRROR: ${USE_CN_MIRROR:-false}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        http_proxy: ${HTTP_PROXY:-}
+        https_proxy: ${HTTPS_PROXY:-}
+        no_proxy: ${NO_PROXY:-}
+    image: lobehub-local:latest
     container_name: lobehub
     ports:
       - '${LOBE_PORT}:3210'
@@ -18,7 +29,7 @@ services:
       - 'KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}'
       - 'AUTH_SECRET=${AUTH_SECRET}'
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
-      - 'INTERNAL_APP_URL=http://localhost:3210'
+      - 'INTERNAL_APP_URL=${INTERNAL_APP_URL}'
       - 'S3_ENDPOINT=${S3_ENDPOINT}'
       - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
       - 'S3_ENABLE_PATH_STYLE=1'

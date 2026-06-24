@@ -439,6 +439,64 @@ const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase);
 const aiAgentWriteProcedure = aiAgentProcedure.use(withScopedPermission('message:create'));
 
 export const aiAgentRouter = router({
+  getLocalCodexStatus: aiAgentProcedure
+    .input(z.object({ topicId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      if (process.env.ENABLE_LOCAL_CODEX_BRIDGE !== '1') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Local Codex bridge is not enabled',
+        });
+      }
+
+      const { getLocalCodexStatus } =
+        await import('@/server/services/heterogeneousAgent/localCodexStatus');
+      let sessionId: string | undefined;
+      if (input?.topicId) {
+        const topic = await ctx.topicModel.findById(input.topicId);
+        sessionId = topic?.metadata?.heteroSessionId;
+      }
+      const status = await getLocalCodexStatus(sessionId);
+      if (status) return status;
+
+      const latestStatus = await getLocalCodexStatus();
+      return latestStatus
+        ? {
+            ...latestStatus,
+            contextRemaining: undefined,
+            contextWindow: undefined,
+            model: undefined,
+            usedTokens: undefined,
+          }
+        : null;
+    }),
+
+  listLocalCodexModels: aiAgentProcedure.query(async () => {
+    if (process.env.ENABLE_LOCAL_CODEX_BRIDGE !== '1') {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Local Codex bridge is not enabled',
+      });
+    }
+
+    const { listLocalCodexModels } =
+      await import('@/server/services/heterogeneousAgent/localCodexStatus');
+    return listLocalCodexModels();
+  }),
+
+  listLocalCodexSkills: aiAgentProcedure.query(async () => {
+    if (process.env.ENABLE_LOCAL_CODEX_BRIDGE !== '1') {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Local Codex bridge is not enabled',
+      });
+    }
+
+    const { listLocalCodexSkills } =
+      await import('@/server/services/heterogeneousAgent/localCodexStatus');
+    return listLocalCodexSkills();
+  }),
+
   /**
    * Create Thread for client-side task execution in Group mode
    *

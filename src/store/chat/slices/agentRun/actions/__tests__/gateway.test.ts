@@ -51,6 +51,7 @@ vi.mock('@/store/user/selectors', () => ({
 // device resolution, no electron IPC).
 const mockEnv = vi.hoisted(() => ({ isDesktop: false }));
 const mockGateway = vi.hoisted(() => ({ getDeviceInfo: vi.fn() }));
+const mockAgentRuntime = vi.hoisted(() => ({ createStreamConnection: vi.fn() }));
 // Effective runtime mode === 'local' (what isLocalSystemEnabledById returns)
 // and chat mode (what isChatModeById returns).
 const mockRuntime = vi.hoisted(() => ({ isChatMode: false, isLocal: false }));
@@ -70,6 +71,10 @@ vi.mock('@/const/version', async (importOriginal) => {
 
 vi.mock('@/services/electron/gatewayConnection', () => ({
   gatewayConnectionService: { getDeviceInfo: mockGateway.getDeviceInfo },
+}));
+
+vi.mock('@/services/agentRuntime', () => ({
+  agentRuntimeClient: { createStreamConnection: mockAgentRuntime.createStreamConnection },
 }));
 
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => mockAgentStore.state }));
@@ -140,6 +145,7 @@ describe('GatewayActionImpl', () => {
   beforeEach(() => {
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
+    mockAgentRuntime.createStreamConnection.mockReset();
   });
 
   afterEach(() => {
@@ -216,6 +222,25 @@ describe('GatewayActionImpl', () => {
       expect(state.gatewayConnections['op-1']).toBeDefined();
       expect(state.gatewayConnections['op-1'].status).toBe('connecting');
       expect(mockClient.connect).toHaveBeenCalledOnce();
+    });
+
+    it('uses the same-origin SSE stream when gatewayUrl is omitted', () => {
+      const { action, state } = createTestAction();
+      const abort = vi.fn();
+      mockAgentRuntime.createStreamConnection.mockReturnValue({ abort });
+
+      action.connectToGateway({
+        operationId: 'op-local',
+        token: '',
+        topicId: TEST_TOPIC_ID,
+      });
+
+      expect(mockAgentRuntime.createStreamConnection).toHaveBeenCalledWith(
+        'op-local',
+        expect.objectContaining({ includeHistory: true }),
+      );
+      expect(state.gatewayConnections['op-local']).toBeDefined();
+      expect(state.gatewayConnections['op-local'].status).toBe('connecting');
     });
 
     it('should wire up status_changed listener', () => {

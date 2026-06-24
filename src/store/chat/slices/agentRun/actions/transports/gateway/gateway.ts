@@ -7,6 +7,7 @@ import {
 import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
+import { agentRuntimeClient } from '@/services/agentRuntime';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
@@ -67,24 +68,20 @@ type Setter = StoreSetter<ChatStore>;
 // ─── Types ───
 
 export interface GatewayConnection {
-  client: Pick<
-    AgentStreamClient,
-    | 'connect'
-    | 'disconnect'
-    | 'on'
-    | 'reconnect'
-    | 'sendInterrupt'
-    | 'sendToolResult'
-    | 'updateToken'
-  >;
+  client: GatewayTransportClient;
   status: ConnectionStatus;
 }
+
+type GatewayTransportClient = Pick<
+  AgentStreamClient,
+  'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendInterrupt' | 'sendToolResult' | 'updateToken'
+>;
 
 export interface ConnectGatewayParams {
   /**
    * Gateway WebSocket URL (e.g. https://agent-gateway.lobehub.com)
    */
-  gatewayUrl: string;
+  gatewayUrl?: string;
   /**
    * Callback for each agent event received
    */
@@ -135,6 +132,52 @@ export class GatewayActionImpl {
   createClient: (options: AgentStreamClientOptions) => GatewayConnection['client'] = (options) =>
     new AgentStreamClient(options);
 
+  createLocalClient = (operationId: string): GatewayTransportClient => {
+    const listeners = new Map<string, Array<(...args: any[]) => void>>();
+    let controller: AbortController | undefined;
+    const emit = (event: string, ...args: any[]) => {
+      for (const listener of listeners.get(event) ?? []) listener(...args);
+    };
+
+    const client: GatewayTransportClient = {
+      connect: () => {
+        emit('status_changed', 'connecting');
+        controller = agentRuntimeClient.createStreamConnection(operationId, {
+          includeHistory: true,
+          onConnect: () => {
+            emit('status_changed', 'connected');
+            emit('connected');
+          },
+          onDisconnect: () => {
+            emit('status_changed', 'disconnected');
+            emit('disconnected');
+          },
+          onError: (error) => emit('error', error),
+          onEvent: (event) => {
+            if (event.type === 'connected' || event.type === 'heartbeat') return;
+            emit('agent_event', event as AgentStreamEvent);
+            if (event.type === 'agent_runtime_end' || event.type === 'error') {
+              queueMicrotask(() => controller?.abort());
+            }
+          },
+        });
+      },
+      disconnect: () => controller?.abort(),
+      on: ((event: string, listener: (...args: any[]) => void) => {
+        listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+      }) as GatewayTransportClient['on'],
+      reconnect: async () => {
+        controller?.abort();
+        client.connect();
+      },
+      sendInterrupt: () => {},
+      sendToolResult: () => false,
+      updateToken: () => {},
+    };
+
+    return client;
+  };
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -152,7 +195,9 @@ export class GatewayActionImpl {
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
 
-    const client = this.createClient({ gatewayUrl, operationId, resumeOnConnect, token });
+    const client = gatewayUrl
+      ? this.createClient({ gatewayUrl, operationId, resumeOnConnect, token })
+      : this.createLocalClient(operationId);
 
     // Track connection in store
     this.#set(
@@ -379,8 +424,12 @@ export class GatewayActionImpl {
       tempMessageIds,
     } = params;
 
-    const agentGatewayUrl =
-      window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+    const serverConfig = window.global_serverConfigStore!.getState().serverConfig;
+    const agentGatewayUrl = serverConfig.agentGatewayUrl;
+    const useLocalCodexBridge = !agentGatewayUrl && serverConfig.enableLocalCodexBridge;
+    if (!agentGatewayUrl && !useLocalCodexBridge) {
+      throw new Error('No agent gateway or local Codex bridge is configured');
+    }
 
     const isCreateNewTopic = !context.topicId;
     const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;

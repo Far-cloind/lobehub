@@ -8,6 +8,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
+import CodexRuntimeStatus from './CodexRuntimeStatus';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
 import WorkingDirectorySection from './WorkingDirectorySection';
 
@@ -67,6 +68,7 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     return (
       <>
         <HeteroDeviceSwitcher agentId={agentId} />
+        <CodexRuntimeStatus agentId={agentId} />
         {renderWorkspace()}
       </>
     );

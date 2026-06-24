@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 interface MockGlobalConfigOptions {
   agentGatewayUrl?: string;
   enableAgentGateway?: boolean;
+  enableLocalCodexBridge?: boolean;
 }
 
 const mockGlobalConfigDependencies = (
@@ -42,6 +43,9 @@ const mockGlobalConfigDependencies = (
       ...(options.enableAgentGateway === undefined
         ? {}
         : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
+      ...(options.enableLocalCodexBridge === undefined
+        ? {}
+        : { ENABLE_LOCAL_CODEX_BRIDGE: options.enableLocalCodexBridge }),
     },
     getAppConfig: vi.fn(() => ({
       DEFAULT_AGENT_CONFIG: '',
@@ -194,6 +198,16 @@ describe('getServerGlobalConfig', () => {
 
     await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
       enableGatewayMode: false,
+    });
+  });
+
+  it('should expose local Codex bridge availability when enabled', async () => {
+    await expect(loadServerConfig(false, { enableLocalCodexBridge: true })).resolves.toMatchObject({
+      enableLocalCodexBridge: true,
+    });
+
+    await expect(loadServerConfig(false)).resolves.toMatchObject({
+      enableLocalCodexBridge: false,
     });
   });
 });

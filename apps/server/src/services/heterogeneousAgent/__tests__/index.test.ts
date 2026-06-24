@@ -40,14 +40,22 @@ const buildEvent = (
   type,
 });
 
-const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
+const createService = (
+  overrides: { streamEventManager?: IStreamEventManager; topicModel?: any } = {},
+) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
+  const topicModel = overrides.topicModel ?? {
+    findById: vi.fn(async () => null),
+    update: vi.fn(async () => []),
+    updateMetadata: vi.fn(async () => undefined),
+  };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
+    topicModel,
   });
-  return { manager, persistenceHandler, published, service };
+  return { manager, persistenceHandler, published, service, topicModel };
 };
 
 describe('HeterogeneousAgentService', () => {
@@ -208,6 +216,22 @@ describe('HeterogeneousAgentService', () => {
   });
 
   describe('heteroFinish', () => {
+    it.each(['success', 'error', 'cancelled'] as const)(
+      'clears the topic running status on %s',
+      async (result) => {
+        const { service, topicModel } = createService();
+
+        await service.heteroFinish({
+          agentType: 'codex',
+          operationId: `op-${result}`,
+          result,
+          topicId: 'topic-1',
+        });
+
+        expect(topicModel.update).toHaveBeenCalledWith('topic-1', { status: 'active' });
+      },
+    );
+
     it('publishes a terminal agent_runtime_end with the high-level result', async () => {
       const { manager, published, service } = createService();
 

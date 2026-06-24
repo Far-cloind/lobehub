@@ -56,6 +56,35 @@ describe('serverConfigSelectors', () => {
     });
   });
 
+  describe('enableLocalCodexBridge', () => {
+    it('should return true when local Codex bridge is enabled', () => {
+      const store = initServerConfigStore({
+        serverConfig: {
+          aiProvider: {},
+          enableLocalCodexBridge: true,
+          telemetry: {},
+        },
+      });
+
+      const result = serverConfigSelectors.enableLocalCodexBridge(store.getState());
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when local Codex bridge is not defined', () => {
+      const store = initServerConfigStore({
+        serverConfig: {
+          aiProvider: {},
+          telemetry: {},
+        },
+      });
+
+      const result = serverConfigSelectors.enableLocalCodexBridge(store.getState());
+
+      expect(result).toBe(false);
+    });
+  });
+
   describe('enabledTelemetryChat', () => {
     it('should return langfuse value from store when defined', () => {
       const store = initServerConfigStore({

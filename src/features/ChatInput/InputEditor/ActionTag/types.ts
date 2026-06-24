@@ -14,7 +14,7 @@
 export type ActionTagCategory = 'command' | 'skill' | 'tool' | 'projectSkill' | 'agentSkill';
 
 // Built-in commands: client-side intercepted, never sent to AI
-export type CommandType = 'compact' | 'newTopic';
+export type CommandType = 'compact' | 'model' | 'newTopic' | 'skill' | 'skills' | 'status';
 
 // Skills use dynamic identifiers from agent config (plugin/tool identifiers)
 export type SkillType = string & {};
@@ -32,4 +32,8 @@ export interface ActionTagData {
 export const BUILTIN_COMMANDS: ActionTagData[] = [
   { category: 'command', label: 'newTopic', type: 'newTopic' },
   { category: 'command', label: 'compact', type: 'compact' },
+  { category: 'command', label: 'status', type: 'status' },
+  { category: 'command', label: 'model', type: 'model' },
+  { category: 'command', label: 'skills', type: 'skills' },
+  { category: 'command', label: 'skill', type: 'skill' },
 ];

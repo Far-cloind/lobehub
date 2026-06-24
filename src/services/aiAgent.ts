@@ -123,6 +123,18 @@ export interface UpdateClientTaskThreadStatusParams {
 }
 
 class AiAgentService {
+  async getLocalCodexStatus(topicId?: string) {
+    return await lambdaClient.aiAgent.getLocalCodexStatus.query({ topicId });
+  }
+
+  async listLocalCodexModels() {
+    return await lambdaClient.aiAgent.listLocalCodexModels.query();
+  }
+
+  async listLocalCodexSkills() {
+    return await lambdaClient.aiAgent.listLocalCodexSkills.query();
+  }
+
   /**
    * Execute a single Agent task.
    * Returns the operationId needed to connect to the Agent Gateway.

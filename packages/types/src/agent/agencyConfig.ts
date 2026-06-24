@@ -71,6 +71,8 @@ export interface HeterogeneousProviderConfig {
   effort?: HeterogeneousReasoningEffort;
   /** Custom environment variables (local CLI only). */
   env?: Record<string, string>;
+  /** Model override passed to the local CLI. */
+  model?: string;
   /**
    * CLI model, surfaced through the chat-input model selector and translated
    * into the provider-specific model override at spawn time. Empty / omitted

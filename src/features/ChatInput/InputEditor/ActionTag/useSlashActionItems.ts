@@ -5,7 +5,14 @@ import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
+import {
+  ArchiveIcon,
+  BotIcon,
+  GaugeIcon,
+  ListTreeIcon,
+  MessageSquarePlusIcon,
+  WandSparklesIcon,
+} from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,7 +44,11 @@ interface SlashMenuOption {
 
 const COMMAND_ICONS: Record<string, any> = {
   compact: ArchiveIcon,
+  model: BotIcon,
   newTopic: MessageSquarePlusIcon,
+  skill: WandSparklesIcon,
+  skills: ListTreeIcon,
+  status: GaugeIcon,
 };
 
 export const useSlashActionItems = (): SlashOptions['items'] => {
@@ -147,7 +158,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
       const makeSkillItem = (skill: ActionTagData): SlashMenuOption => ({
         icon: SkillsIcon,
         key: `skill-${skill.type}`,
-        label: skill.label,
+        label: `$${skill.label}`,
         metadata: { category: 'skill', type: skill.type },
         onSelect: (editor: IEditor) => {
           const payload: InsertActionTagPayload = {
@@ -223,6 +234,12 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
       if (isAtLineStart) {
         for (const action of BUILTIN_COMMANDS) {
           if (action.type === 'newTopic' && !activeTopicId) continue;
+          if (
+            ['model', 'skill', 'skills', 'status'].includes(action.type) &&
+            agencyConfig?.heterogeneousProvider?.type !== 'codex'
+          ) {
+            continue;
+          }
           allItems.push(makeCommandItem(action) as SlashItem);
         }
       }

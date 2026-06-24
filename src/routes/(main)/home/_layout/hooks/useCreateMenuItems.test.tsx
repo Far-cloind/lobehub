@@ -15,9 +15,17 @@ const loadGroupsMock = vi.hoisted(() => vi.fn());
 const createNewPageMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+const constMocks = vi.hoisted(() => ({
+  isDesktop: true,
+}));
+const serverConfigMocks = vi.hoisted(() => ({
+  enableLocalCodexBridge: false,
+}));
 
 vi.mock('@lobechat/const', () => ({
-  isDesktop: true,
+  get isDesktop() {
+    return constMocks.isDesktop;
+  },
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/client', () => ({
@@ -124,6 +132,21 @@ vi.mock('@/store/page', () => ({
     }),
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  serverConfigSelectors: {
+    enableLocalCodexBridge: (s: { serverConfig: { enableLocalCodexBridge: boolean } }) =>
+      s.serverConfig.enableLocalCodexBridge,
+  },
+  useServerConfigStore: (
+    selector: (state: { serverConfig: { enableLocalCodexBridge: boolean } }) => unknown,
+  ) =>
+    selector({
+      serverConfig: {
+        enableLocalCodexBridge: serverConfigMocks.enableLocalCodexBridge,
+      },
+    }),
+}));
+
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ preference: { lab: {} } }),
@@ -145,6 +168,8 @@ const isActionItem = (
 describe('useCreateMenuItems', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    constMocks.isDesktop = true;
+    serverConfigMocks.enableLocalCodexBridge = false;
   });
 
   it('creates the Claude Code agent normally when the CLI is available', async () => {
@@ -211,5 +236,47 @@ describe('useCreateMenuItems', () => {
     });
     expect(refreshAgentListMock).toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+  });
+
+  it('hides heterogeneous agent menu items on Web when the local Codex bridge is disabled', () => {
+    constMocks.isDesktop = false;
+    serverConfigMocks.enableLocalCodexBridge = false;
+
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    expect(result.current.createHeterogeneousAgentMenuItems()).toEqual([]);
+  });
+
+  it('shows only Codex on Web when the local Codex bridge is enabled', async () => {
+    constMocks.isDesktop = false;
+    serverConfigMocks.enableLocalCodexBridge = true;
+
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const items = result.current.createHeterogeneousAgentMenuItems();
+
+    expect(items).toHaveLength(1);
+    expect(isActionItem(items[0]) && items[0].key).toBe('newCodexAgent');
+
+    await act(async () => {
+      if (isActionItem(items[0])) {
+        await items[0].onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+      }
+    });
+
+    expect(createAgentMock).toHaveBeenCalledWith({
+      config: {
+        agencyConfig: {
+          heterogeneousProvider: {
+            command: 'codex',
+            type: 'codex',
+          },
+        },
+        avatar: 'avatar',
+        systemRole: '',
+        title: 'Codex',
+      },
+      groupId: undefined,
+    });
   });
 });
