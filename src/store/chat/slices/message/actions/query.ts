@@ -167,6 +167,16 @@ export class MessageQueryActionImpl {
    *   thrash. `agent_runtime_end` clears the running flag *before* its final
    *   `replaceMessages`, so the settled snapshot still writes through.
    */
+  /**
+   * Terminal gateway actions that carry the authoritative final message state.
+   * These must be allowed through even when the operation is still marked as
+   * "running" — the write-through was deferred to avoid per-token thrash during
+   * streaming, but the terminal event is the last update. Without this, the SWR
+   * cache retains stale pre-stream data that can overwrite the fresh content on
+   * the next revalidation (e.g. mobile tab refocus within the dedup window).
+   */
+  static #TERMINAL_ACTIONS = new Set(['gateway/agent_runtime_end', 'gateway/runtime_error']);
+
   #writeThroughMessageCache = (
     ctx: MessageMapKeyInput,
     messagesKey: string,
@@ -174,7 +184,11 @@ export class MessageQueryActionImpl {
     action?: string,
   ): void => {
     if (action === 'useFetchMessages') return;
-    if (operationSelectors.isAgentRuntimeRunningByContext(ctx)(this.#get())) return;
+    if (
+      !ChatMessageAction.#TERMINAL_ACTIONS.has(action ?? '') &&
+      operationSelectors.isAgentRuntimeRunningByContext(ctx)(this.#get())
+    )
+      return;
 
     // Match every `message:list` entry whose context resolves to the same bucket
     // (any page-size / version / workspace-augmented variant). `revalidate: false`

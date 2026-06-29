@@ -54,9 +54,13 @@ const loadGetExecutor = async () => {
  * This updates the ConversationArea component via React subscription:
  *   dbMessagesMap → ConversationArea (messages prop) → ConversationStore → UI
  */
-const fetchAndReplaceMessages = async (get: () => ChatStore, context: ConversationContext) => {
+const fetchAndReplaceMessages = async (
+  get: () => ChatStore,
+  context: ConversationContext,
+  action?: string,
+) => {
   const messages = await messageService.getMessages(context);
-  get().replaceMessages(messages, { context });
+  get().replaceMessages(messages, { action, context });
   return messages;
 };
 
@@ -715,7 +719,9 @@ export const createGatewayEventHandler = (
             // messages are the only in-memory state and they need the
             // refetch to be reconciled with the server-side rows.
           } else {
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await fetchAndReplaceMessages(get, context, 'gateway/agent_runtime_end').catch(
+              console.error,
+            );
           }
 
           // Terminal run lifecycle. `isCompletedRuntimeEnd` is the clean-vs-not
@@ -808,7 +814,9 @@ export const createGatewayEventHandler = (
             get().replaceMessages(updateResult.messages, { context });
           } else {
             // Fallback when the mutation response doesn't include messages.
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await fetchAndReplaceMessages(get, context, 'gateway/runtime_error').catch(
+              console.error,
+            );
           }
 
           // Then overlay the inline error. This ensures the UI always shows the
