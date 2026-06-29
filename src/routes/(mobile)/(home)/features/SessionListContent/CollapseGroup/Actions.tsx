@@ -1,9 +1,8 @@
-import { type DropdownMenuProps, type MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon, Icon, type MenuProps } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { MoreVertical, PencilLine, Plus, Settings2, Trash, UsersRound } from 'lucide-react';
+import { MoreVertical, PencilLine, Settings2, Trash, UsersRound } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,15 +11,19 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useSessionStore } from '@/store/session';
 
-const styles = createStaticStyles(({ css }) => ({
+import MobileMenuPopup from '../MobileMenuPopup';
+import { useMobileCreateAgentMenuItems } from '../useMobileCreateAgentMenuItems';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   modalRoot: css`
     z-index: 2000;
   `,
 }));
-interface ActionsProps extends Pick<DropdownMenuProps, 'onOpenChange'> {
+interface ActionsProps {
   id?: string;
   isCustomGroup?: boolean;
   isPinned?: boolean;
+  onOpenChange?: (open: boolean) => void;
   openConfigModal: () => void;
   openRenameModal?: () => void;
 }
@@ -34,15 +37,18 @@ const Actions = memo<ActionsProps>(
     const { message } = App.useApp();
 
     const isMobile = useIsMobile();
+    const [menuOpen, setMenuOpen] = useState(false);
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
-    const [createSession, removeSessionGroup] = useSessionStore((s) => [
-      s.createSession,
-      s.removeSessionGroup,
-    ]);
+    const [removeSessionGroup] = useSessionStore((s) => [s.removeSessionGroup]);
 
     const [createGroup] = useAgentGroupStore((s) => [s.createGroup]);
+    const { isCreating: isCreatingAgent, items: createAgentItems } = useMobileCreateAgentMenuItems({
+      groupId: id,
+      isPinned,
+      showFeedback: true,
+    });
 
     const sessionGroupConfigPublicItem: MenuItemType = {
       icon: <Icon icon={Settings2} />,
@@ -51,22 +57,6 @@ const Actions = memo<ActionsProps>(
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
         openConfigModal();
-      },
-    };
-
-    const newAgentPublicItem: MenuItemType = {
-      icon: <Icon icon={Plus} />,
-      key: 'newAgent',
-      label: t('newAgent'),
-      onClick: async ({ domEvent }) => {
-        domEvent.stopPropagation();
-        const key = 'createNewAgentInGroup';
-        message.loading({ content: t('sessionGroup.creatingAgent'), duration: 0, key });
-
-        await createSession({ group: id, pinned: isPinned });
-
-        message.destroy(key);
-        message.success({ content: t('sessionGroup.createAgentSuccess') });
       },
     };
 
@@ -166,23 +156,34 @@ const Actions = memo<ActionsProps>(
     );
 
     const menuItems = useMemo(() => {
-      return [newAgentPublicItem, newGroupChatItem, { type: 'divider' as const }, ...tailItems];
-    }, [newAgentPublicItem, newGroupChatItem, tailItems]);
+      return [...createAgentItems, newGroupChatItem, { type: 'divider' as const }, ...tailItems];
+    }, [createAgentItems, newGroupChatItem, tailItems]);
+
+    const handleOpenChange = (open: boolean) => {
+      setMenuOpen(open);
+      onOpenChange?.(open);
+    };
 
     return (
       <>
-        <DropdownMenu items={menuItems} onOpenChange={onOpenChange}>
+        <MobileMenuPopup
+          items={menuItems}
+          open={menuOpen}
+          onClose={() => handleOpenChange(false)}
+          onOpenChange={handleOpenChange}
+        >
           <ActionIcon
             active={isMobile ? true : false}
             icon={MoreVertical}
-            loading={isCreatingGroup}
+            loading={isCreatingAgent || isCreatingGroup}
             size={{ blockSize: 22, size: 16 }}
             style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
             onClick={(e) => {
               e.stopPropagation();
+              handleOpenChange(true);
             }}
           />
-        </DropdownMenu>
+        </MobileMenuPopup>
 
         <MemberSelectionModal
           mode="create"

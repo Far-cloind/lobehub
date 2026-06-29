@@ -1,17 +1,14 @@
+import { type SidebarAgentItem } from '@lobechat/types';
 import { type CollapseProps } from 'antd';
-import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFetchSessions } from '@/hooks/useFetchSessions';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
-import { useSessionStore } from '@/store/session';
-import { sessionSelectors } from '@/store/session/selectors';
-import { type LobeAgentSession, type LobeSessions } from '@/types/session';
-import { LobeSessionType, SessionDefaultGroup } from '@/types/session';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
+import { SessionDefaultGroup } from '@/types/session';
 
 import CollapseGroup from './CollapseGroup';
 import Actions from './CollapseGroup/Actions';
@@ -27,34 +24,20 @@ const DefaultMode = memo(() => {
   const [renameGroupModalOpen, setRenameGroupModalOpen] = useState(false);
   const [configGroupModalOpen, setConfigGroupModalOpen] = useState(false);
 
-  useFetchSessions();
+  useFetchAgentList();
 
-  const isMobile = useServerConfigStore(serverConfigSelectors.isMobile);
+  const defaultAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents);
+  const customAgentGroups = useHomeStore(homeAgentListSelectors.agentGroups);
+  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents);
 
-  const defaultSessions = useSessionStore(sessionSelectors.defaultSessions, isEqual);
-  const customSessionGroups = useSessionStore(sessionSelectors.customSessionGroups, isEqual);
-  const pinnedSessions = useSessionStore(sessionSelectors.pinnedSessions, isEqual);
+  const filterItemsForView = (items: SidebarAgentItem[]) =>
+    items.filter((item) => item.type !== 'group');
 
-  const shouldHideSession = (session: LobeSessions[0]) =>
-    !isMobile &&
-    session.type === LobeSessionType.Agent &&
-    Boolean((session as LobeAgentSession).config?.virtual);
-
-  const filterSessionsForView = (sessions: LobeSessions): LobeSessions => {
-    const filteredForDevice = isMobile
-      ? sessions.filter((session) => session.type !== LobeSessionType.Group)
-      : sessions;
-
-    if (isMobile) return filteredForDevice;
-
-    return filteredForDevice.filter((session) => !shouldHideSession(session));
-  };
-
-  const filteredDefaultSessions = filterSessionsForView(defaultSessions);
-  const filteredPinnedSessions = filterSessionsForView(pinnedSessions);
-  const filteredCustomSessionGroups = customSessionGroups?.map((group) => ({
+  const filteredDefaultAgents = filterItemsForView(defaultAgents);
+  const filteredPinnedAgents = filterItemsForView(pinnedAgents);
+  const filteredCustomAgentGroups = customAgentGroups.map((group) => ({
     ...group,
-    children: filterSessionsForView(group.children),
+    items: filterItemsForView(group.items),
   }));
 
   const [sessionGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
@@ -65,15 +48,14 @@ const DefaultMode = memo(() => {
   const items = useMemo(
     () =>
       [
-        filteredPinnedSessions &&
-          filteredPinnedSessions.length > 0 && {
-            children: <SessionList dataSource={filteredPinnedSessions} />,
-            extra: <Actions isPinned openConfigModal={() => setConfigGroupModalOpen(true)} />,
-            key: SessionDefaultGroup.Pinned,
-            label: t('pin'),
-          },
-        ...(filteredCustomSessionGroups || []).map(({ id, name, children }) => ({
-          children: <SessionList dataSource={children} groupId={id} />,
+        filteredPinnedAgents.length > 0 && {
+          children: <SessionList dataSource={filteredPinnedAgents} />,
+          extra: <Actions isPinned openConfigModal={() => setConfigGroupModalOpen(true)} />,
+          key: SessionDefaultGroup.Pinned,
+          label: t('pin'),
+        },
+        ...filteredCustomAgentGroups.map(({ id, items, name }) => ({
+          children: <SessionList dataSource={items} groupId={id} />,
           extra: (
             <Actions
               isCustomGroup
@@ -89,13 +71,13 @@ const DefaultMode = memo(() => {
           label: name,
         })),
         {
-          children: <SessionList dataSource={filteredDefaultSessions || []} />,
+          children: <SessionList dataSource={filteredDefaultAgents} />,
           extra: <Actions openConfigModal={() => setConfigGroupModalOpen(true)} />,
           key: SessionDefaultGroup.Default,
           label: t('defaultList'),
         },
       ].filter(Boolean) as CollapseProps['items'],
-    [t, filteredCustomSessionGroups, filteredPinnedSessions, filteredDefaultSessions],
+    [t, filteredCustomAgentGroups, filteredPinnedAgents, filteredDefaultAgents],
   );
 
   return (

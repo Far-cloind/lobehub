@@ -6,17 +6,17 @@ import { SESSION_CHAT_URL } from '@/const/url';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
-import { useSessionStore } from '@/store/session';
-import { sessionSelectors } from '@/store/session/selectors';
 
 import ListItem from '../ListItem';
 
 const Inbox = memo(() => {
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const isInboxActive = useSessionStore(sessionSelectors.isInboxSession);
   const navigateToAgent = useNavigateToAgent();
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInboxActive = !!inboxAgentId && activeAgentId === inboxAgentId;
 
   return (
     <Link
