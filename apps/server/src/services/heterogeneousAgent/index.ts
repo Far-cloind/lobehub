@@ -318,6 +318,51 @@ export class HeterogeneousAgentService {
     const topic = await this.topicModel.findById(topicId);
     return topic?.metadata?.heteroSessionId;
   }
+
+  /**
+   * Append content to the last assistant message for a Codex run. Used to inject
+   * S3 URLs for generated images after the stream has already ended.
+   *
+   * Reads the current message content from DB, appends, updates, and broadcasts
+   * a stream_chunk so WebSocket subscribers see the new content without refresh.
+   */
+  async appendContentToLastAssistant(
+    topicId: string,
+    operationId: string,
+    appendContent: string,
+  ): Promise<void> {
+    const topic = await this.topicModel.findById(topicId);
+    const msgRef = topic?.metadata?.heteroCurrentMsgId;
+    if (!msgRef || msgRef.operationId !== operationId) {
+      log(
+        'appendContentToLastAssistant: no matching heteroCurrentMsgId topic=%s op=%s',
+        topicId,
+        operationId,
+      );
+      return;
+    }
+
+    const msg = await this.messageModel.findById(msgRef.msgId);
+    const currentContent = (typeof msg?.content === 'string' ? msg.content : '') as string;
+    const newContent = currentContent + appendContent;
+
+    await this.messageModel.update(msgRef.msgId, { content: newContent });
+
+    // Broadcast a stream_chunk so the renderer can display the image URLs live.
+    // The stepIndex uses a high value to avoid collision with in-stream events.
+    await this.streamEventManager.publishStreamEvent(operationId, {
+      data: { chunkType: 'text', content: appendContent },
+      stepIndex: 999_999,
+      type: 'stream_chunk',
+    });
+
+    log(
+      'appendContentToLastAssistant: updated message=%s topic=%s op=%s',
+      msgRef.msgId,
+      topicId,
+      operationId,
+    );
+  }
 }
 
 export {

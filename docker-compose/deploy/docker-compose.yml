@@ -95,13 +95,9 @@ services:
     image: rustfs/rustfs:latest
     container_name: lobe-rustfs
     ports:
-      - '${RUSTFS_PORT}:9000'
       - '${RUSTFS_ADMIN_PORT}:9001'
-    # Optional: Remove or change RUSTFS_ADMIN_PORT if:
-    # - You don't need external access to rustfs control panel
-    # - The ports conflict with other services on your host
-    # - RUSTFS_PORT is necessary only if you need to upload images to conversations. (avatar uploads are not affected)
-    # - Uploading images to conversations requires a browser-accessible S3_ENDPOINT.
+    # S3 API port (9000) is NOT exposed directly — nginx-cors sits in front of
+    # it to add CORS headers required for browser→S3 uploads.
     environment:
       - RUSTFS_CONSOLE_ENABLE=true
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
@@ -115,6 +111,19 @@ services:
       retries: 30
     command:
       ['--access-key', '${RUSTFS_ACCESS_KEY}', '--secret-key', '${RUSTFS_SECRET_KEY}', '/data']
+    networks:
+      - lobe-network
+
+  nginx-cors:
+    image: nginx:alpine
+    container_name: lobe-nginx-cors
+    ports:
+      - '${RUSTFS_PORT}:9000'
+    volumes:
+      - ./nginx-cors.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      rustfs:
+        condition: service_healthy
     networks:
       - lobe-network
 
@@ -135,6 +144,8 @@ services:
   searxng:
     image: searxng/searxng
     container_name: lobe-searxng
+    ports:
+      - '8180:8080'
     volumes:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:

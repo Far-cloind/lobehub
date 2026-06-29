@@ -29,20 +29,49 @@ export interface LocalCodexRunParams extends Omit<
   model?: string;
 }
 
+/**
+ * Build the system context that tells Codex about the file upload tool.
+ * Injected as the first text block before every user prompt.
+ */
+const buildUploadToolContext = (): string => {
+  // The server process runs from the LobeHub project root.
+  // e.g. "cd ~/GitHub/lobehub && npx next start" → cwd is the project root.
+  const lobehubRoot = process.cwd();
+  const uploadScript = `${lobehubRoot}/scripts/codex-upload.mjs`;
+
+  return `You are running inside LobeHub, a self-hosted AI chat platform.
+
+## Sharing files with the user
+
+When you generate images, documents, or any files the user should be able to view or download, use the upload script to share them:
+
+  node ${uploadScript} <file-path> [<file-path> ...]
+
+This command uploads files to cloud storage and prints markdown-formatted links.
+Copy the printed markdown into your response so the user can click to view the files.
+
+Important:
+- ALWAYS use this when you generate images (PNG, JPG, SVG, WebP, etc.)
+- Your generated images are typically saved under ~/.codex/generated_images/
+- You can upload multiple files in one command
+- The printed output is ready-to-use markdown — include it verbatim in your response
+- For existing files the user asks you to share, use this tool to make them accessible`;
+};
+
 const buildPrompt = (params: LocalCodexRunParams): AgentPromptInput => {
-  const blocks: Exclude<AgentPromptInput, string> = [];
+  // Upload tool instruction always comes first.
+  const textBlocks = [
+    { text: buildUploadToolContext(), type: 'text' as const },
+    ...(params.systemContext ? [{ text: params.systemContext, type: 'text' as const }] : []),
+    { text: params.prompt, type: 'text' as const },
+  ];
 
-  if (params.systemContext) blocks.push({ text: params.systemContext, type: 'text' });
-  blocks.push({ text: params.prompt, type: 'text' });
+  const imageBlocks = (params.imageList ?? []).map((image) => ({
+    source: { id: image.id, type: 'url' as const, url: image.url },
+    type: 'image' as const,
+  }));
 
-  for (const image of params.imageList ?? []) {
-    blocks.push({
-      source: { id: image.id, type: 'url', url: image.url },
-      type: 'image',
-    });
-  }
-
-  return blocks;
+  return [...textBlocks, ...imageBlocks];
 };
 
 export const cancelLocalCodexRun = (operationId: string, userId: string): boolean => {

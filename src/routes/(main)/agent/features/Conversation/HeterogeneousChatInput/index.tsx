@@ -27,13 +27,11 @@ import { useChatStore } from '@/store/chat';
 import HeteroControlBar from './HeteroControlBar';
 import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 
-// Heterogeneous agents (e.g. Claude Code) bring their own toolchain and memory,
-// so most LobeHub-side pickers don't apply. Typo is kept so the user can still
-// toggle the rich-text formatting bar. The CLI model + thinking-effort selector
-// is injected right after it via `extraActionItems`, so it sits in the input's
-// bottom-left corner (consistent with where the model picker lives in a normal
-// agent chat), rather than off in the control-bar strip below the box.
-const leftActions: ActionKeys[] = ['typo'];
+// Heterogeneous agents (e.g. Claude Code, Codex) bring their own toolchain and
+// memory, so most LobeHub-side pickers don't apply. Typo is kept so the user can
+// still toggle the rich-text formatting bar, and fileUpload is enabled so users
+// can attach images/documents that the CLI agent accesses from its working dir.
+const leftActions: ActionKeys[] = ['typo', 'fileUpload'];
 
 /**
  * GuardBanner

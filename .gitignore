@@ -122,6 +122,7 @@ CLAUDE.local.md
 
 # Docker development data
 docker-compose/dev/data/
+docker-compose/deploy/data/
 
 # Migration scripts data
 scripts/clerk-to-betterauth/test/*.csv
