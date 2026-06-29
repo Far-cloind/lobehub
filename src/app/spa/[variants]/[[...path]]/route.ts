@@ -14,6 +14,18 @@ import { translation } from '@/server/translation';
 import { type SPAClientEnv, type SPAServerConfig } from '@/types/spaServerConfig';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
+const resolveVariants = (serialized: string) => {
+  if (serialized === 'mobile') {
+    return { ...RouteVariants.createVariants(), isMobile: true };
+  }
+
+  if (serialized === 'desktop') {
+    return { ...RouteVariants.createVariants(), isMobile: false };
+  }
+
+  return RouteVariants.deserializeVariants(serialized);
+};
+
 export function generateStaticParams() {
   const mobileOptions = isDesktop ? [false] : [true, false];
   const staticLocales: Locales[] = ['en-US', 'zh-CN'];
@@ -78,7 +90,7 @@ export async function GET(
   { params }: { params: Promise<{ path?: string[]; variants: string }> },
 ) {
   const { variants } = await params;
-  const { locale, isMobile } = RouteVariants.deserializeVariants(variants);
+  const { locale, isMobile } = resolveVariants(variants);
 
   const spaConfig: SPAServerConfig = {
     analyticsConfig: buildAnalyticsConfig({ desktop: true }),

@@ -149,8 +149,11 @@ export function renderSpaHtml(
 
   return new Response(html, {
     headers: {
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'content-type': 'text/html; charset=utf-8',
+      'Expires': '0',
+      'Pragma': 'no-cache',
+      'Surrogate-Control': 'no-store',
     },
   });
 }

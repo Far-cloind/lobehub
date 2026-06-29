@@ -171,6 +171,61 @@ export function defineConfig(config: CustomNextConfig) {
           ],
           source: '/screenshots/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
+        // SPA hashed assets — safe to cache immutably since filenames include content hashes
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/_spa/assets/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/_spa/vendor/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/_spa/i18n/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/_spa-auth/assets/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/_spa-auth/vendor/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/_spa-auth/i18n/:path*',
+        },
         {
           headers: [
             {
